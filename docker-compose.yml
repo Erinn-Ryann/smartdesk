@@ -1,0 +1,10 @@
+services:
+  api:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DB_PATH=/data/smartdesk.db
+    volumes: ["smartdesk-data:/data"]
+volumes:
+  smartdesk-data:
