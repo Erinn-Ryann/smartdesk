@@ -41,3 +41,23 @@ def test_analyze_sets_priority_and_stats(client):
 
 def test_heuristic_defaults():
     assert heuristic("Bonjour")["priority"] == "normale"
+
+
+def test_health(client):
+    assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_invalid_email_rejected(client):
+    assert client.post("/customers", json={"name": "A", "email": "pas-un-email"}).status_code == 422
+
+
+def test_empty_message_rejected(client):
+    cid = client.post("/customers", json={"name": "A", "email": "a@a.fr"}).json()["id"]
+    assert client.post("/tickets", json={"customer_id": cid, "subject": "x", "message": ""}).status_code == 422
+
+
+def test_sales_call_fallback(client):
+    cid = client.post("/customers", json={"name": "A", "email": "a@a.fr"}).json()["id"]
+    r = client.post("/calls", json={"customer_id": cid, "notes": "Client intéressé, demande un devis"}).json()
+    assert r["interest"] == "chaud" and r["source"] == "regles"
+    assert client.get("/stats").json()["prospects_chauds"] == 1

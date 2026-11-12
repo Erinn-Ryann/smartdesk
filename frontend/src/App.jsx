@@ -16,18 +16,19 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState({});
+  const [calls, setCalls] = useState([]);
   const [error, setError] = useState("");
 
   const refresh = async () => {
     try {
-      const [c, t, s] = await Promise.all([call("/customers"), call("/tickets"), call("/stats")]);
-      setCustomers(c); setTickets(t); setStats(s); setError("");
+      const [c, t, s, k] = await Promise.all([call("/customers"), call("/tickets"), call("/stats"), call("/calls")]);
+      setCustomers(c); setTickets(t); setStats(s); setCalls(k); setError("");
     } catch { setError("API injoignable : lance le backend (uvicorn main:app --reload)."); }
   };
   useEffect(() => { refresh(); }, []);
   const act = async (fn) => { try { await fn(); await refresh(); } catch (e) { setError(e.message); } };
 
-  const nav = [["dashboard", "Tableau de bord"], ["tickets", "Demandes"], ["customers", "Clients"]];
+  const nav = [["dashboard", "Tableau de bord"], ["tickets", "Demandes"], ["customers", "Clients"], ["calls", "Appels"]];
   return (
     <div className="app">
       <aside>
@@ -41,6 +42,7 @@ export default function App() {
         {view === "dashboard" && <Dashboard stats={stats} tickets={tickets} />}
         {view === "customers" && <Customers customers={customers} act={act} />}
         {view === "tickets" && <Tickets tickets={tickets} customers={customers} act={act} />}
+        {view === "calls" && <Calls calls={calls} customers={customers} act={act} />}
       </main>
     </div>
   );
@@ -49,7 +51,7 @@ export default function App() {
 function Dashboard({ stats, tickets }) {
   const cards = [
     ["Demandes", stats.total, "yellow"], ["Urgentes à traiter", stats.urgentes_a_traiter, "rose"],
-    ["En cours", stats.en_cours, "blue"], ["Résolues", stats.resolues, "mint"],
+    ["En cours", stats.en_cours, "blue"], ["Résolues", stats.resolues, "mint"], ["Prospects chauds", stats.prospects_chauds, "yellow"],
   ];
   const urgent = tickets.filter((t) => t.priority === "haute" && t.status !== "resolue");
   return (<>
@@ -125,5 +127,29 @@ function Tickets({ tickets, customers, act }) {
         <textarea rows="4" placeholder="Votre réponse au client…" value={reply} onChange={(e) => setReply(e.target.value)} />
       </>)}</div>
     </div>
+  </>);
+}
+
+const INTEREST = { chaud: ["mint", "Chaud"], tiede: ["yellow", "Tiède"], froid: ["grey", "Froid"] };
+
+function Calls({ calls, customers, act }) {
+  const [f, setF] = useState({ customer_id: "", notes: "" });
+  const [loading, setLoading] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault(); setLoading(true);
+    await act(() => call("/calls", "POST", { ...f, customer_id: +f.customer_id }));
+    setF({ customer_id: "", notes: "" }); setLoading(false);
+  };
+  return (<>
+    <h1>Appels commerciaux</h1><p className="muted">Colle les notes d'un appel : résumé, intérêt et prochaine action sont proposés.</p>
+    <form className="panel detail" onSubmit={submit}>
+      <select required value={f.customer_id} onChange={(e) => setF({ ...f, customer_id: e.target.value })}>
+        <option value="">Client…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      <textarea required rows="4" placeholder="Notes de l'appel…" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
+      <button className="btn" disabled={loading}>{loading ? "Analyse…" : "✨ Analyser l'appel"}</button>
+    </form>
+    {calls.map((k) => (<div className="panel detail" key={k.id}>
+      <div className="row"><b>{k.customer_name}</b><Badge kind={INTEREST[k.interest][0]}>{INTEREST[k.interest][1]}</Badge></div>
+      <p>{k.summary}</p><div className="bubble"><b>Prochaine action :</b> {k.next_action}</div></div>))}
   </>);
 }
